@@ -100,7 +100,7 @@ module Data.Comp.Automata
     , (|->)
     , o
     -- * Product State Spaces
-    , module Data.Comp.Automata.Product
+    , module Data.Projection
     -- * Annotations
     , propAnnQ
     , propAnnUp
@@ -110,7 +110,7 @@ module Data.Comp.Automata
 
 import Data.Comp.Algebra
 import Data.Comp.Annotation
-import Data.Comp.Automata.Product
+import Data.Projection
 import Data.Comp.Number
 import Data.Comp.Term
 import Data.Map (Map)
