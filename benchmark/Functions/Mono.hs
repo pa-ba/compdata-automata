@@ -7,13 +7,13 @@ import DataTypes.Mono
 import Data.Comp
 import Data.Comp.MacroAutomata
 import Data.Comp.Automata
-import Data.Comp.Number
+import Data.Comp.Mapping
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 pathAnnTrans :: (Functor g, Traversable g) => DownTrans g [Int] (g :&: [Int])
-pathAnnTrans q t = simpCxt (fmap (\ (Numbered (n,s)) -> s (n:q)) (number t) :&: q)
+pathAnnTrans q t = simpCxt (fmap (\ (Numbered n s) -> s (n:q)) (number t) :&: q)
 
 
 -- Inlining

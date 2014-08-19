@@ -98,7 +98,7 @@ module Data.Comp.Automata
     -- * Operators for Finite Mappings
     , (&)
     , (|->)
-    , o
+    , empty
     -- * Product State Spaces
     , module Data.Projection
     -- * Annotations
@@ -111,33 +111,13 @@ module Data.Comp.Automata
 import Data.Comp.Algebra
 import Data.Comp.Annotation
 import Data.Projection
-import Data.Comp.Number
+import Data.Comp.Mapping
 import Data.Comp.Term
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 
 
--- The following are operators to specify finite mappings.
 
 
-infix 1 |->
-infixr 0 &
-
--- | left-biased union of two mappings.
-
-(&) :: Ord k => Map k v -> Map k v -> Map k v
-(&) = Map.union
-
--- | This operator constructs a singleton mapping.
-
-(|->) :: k -> a -> Map k a
-(|->) = Map.singleton
-
--- | This is the empty mapping.
-
-o :: Map k a
-o = Map.empty
 
 -- | This function provides access to components of the states from
 -- "below".
@@ -400,7 +380,7 @@ compDownTransHom trans hom q t = runDownTrans' trans q (hom t)
 -- | This type represents transition functions of total, deterministic
 -- top-down tree acceptors (DTAs).
 
-type DownState f q = forall a. Ord a => (q, f a) -> Map a q
+type DownState f q = forall m a. Mapping m a => (q, f a) -> m q
 
 
 -- | Changes the state space of the DTA using the given isomorphism.
@@ -414,36 +394,16 @@ prodDownState :: DownState f p -> DownState f q -> DownState f (p,q)
 prodDownState sp sq ((p,q),t) = prodMap p q (sp (p, t)) (sq (q, t))
 
 
--- | This type is needed to construct the product of two DTAs.
-
-data ProdState p q = LState p
-                   | RState q
-                   | BState p q
--- | This function constructs the pointwise product of two maps each
--- with a default value.
-
-prodMap :: (Ord i) => p -> q -> Map i p -> Map i q -> Map i (p,q)
-prodMap p q mp mq = Map.map final $ Map.unionWith combine ps qs
-    where ps = Map.map LState mp
-          qs = Map.map RState mq
-          combine (LState p) (RState q) = BState p q
-          combine (RState q) (LState p) = BState p q
-          combine _ _                   = error "unexpected merging"
-          final (LState p) = (p, q)
-          final (RState q) = (p, q)
-          final (BState p q) = (p,q)
-
-
 -- | Apply the given state mapping to the given functorial value by
 -- adding the state to the corresponding index if it is in the map and
 -- otherwise adding the provided default state.
 
-appMap :: Traversable f => (forall i . Ord i => f i -> Map i q)
+appMap :: Traversable f => (forall m i . Mapping m i => f i -> m q)
                        -> q -> f (q -> b) -> f (q,b)
 appMap qmap q s = fmap qfun s'
     where s' = number s
-          qfun k@(Numbered (_,a)) = let q' = Map.findWithDefault q k (qmap s')
-                                    in (q', a q')
+          qfun (Numbered i a) = let q' = lookupNumMap q i (qmap s')
+                                in (q', a q')
 
 -- | This function constructs a DTT from a given stateful term--
 -- homomorphism with the state propagated by the given DTA.
@@ -465,8 +425,8 @@ runDownHom st h = runDownTrans (downTrans st h)
 -- to an extended state space.
 type DDownState f p q = (q :< p) => DDownState' f p q
 
-type DDownState' f p q = forall i . (Ord i, ?below :: i -> p, ?above :: p)
-                                => f i -> Map i q
+type DDownState' f p q = forall m i . (Mapping m i, ?below :: i -> p, ?above :: p)
+                                => f i -> m q
 
 -- | This combinator turns an arbitrary DTA into a GDTA.
 
@@ -479,7 +439,7 @@ dDownState f t = f (above,t)
 downState :: DDownState f q q -> DownState f q
 downState f (q,s) = res
     where res = explicit f q bel s
-          bel k = Map.findWithDefault q k res
+          bel k = findWithDefault q k res
 
 
 -- | This combinator constructs the product of two dependant top-down
@@ -503,9 +463,9 @@ prodDDownState sp sq t = prodMap above above (sp t) (sq t)
 runDState :: Traversable f => DUpState' f (u,d) u -> DDownState' f (u,d) d -> d -> Term f -> u
 runDState up down d (Term t) = u where
         t' = fmap bel $ number t
-        bel (Numbered (i,s)) =
-            let d' = Map.findWithDefault d (Numbered (i,undefined)) m
-            in Numbered (i, (runDState up down d' s, d'))
+        bel (Numbered i s) =
+            let d' = lookupNumMap d i m
+            in Numbered i (runDState up down d' s, d')
         m = explicit down (u,d) unNumbered t'
         u = explicit up (u,d) unNumbered t'
 
@@ -519,10 +479,10 @@ runQHom :: (Traversable f, Functor g) =>
            d -> Term f -> (u, Term g)
 runQHom up down trans d (Term t) = (u,t'') where
         t' = fmap bel $ number t
-        bel (Numbered (i,s)) =
-            let d' = Map.findWithDefault d (Numbered (i,undefined)) m
+        bel (Numbered i s) =
+            let d' = lookupNumMap d i m
                 (u', s') = runQHom up down trans d' s
-            in Numbered (i, ((u', d'),s'))
+            in Numbered i ((u', d'),s')
         m = explicit down (u,d) (fst . unNumbered) t'
         u = explicit up (u,d) (fst . unNumbered) t'
         t'' = appCxt $ fmap (snd . unNumbered) $  explicit trans (u,d) (fst . unNumbered) t'
@@ -561,4 +521,4 @@ propAnnDown trans q f' = ann p (trans q f)
 pathAnn :: forall g. (Traversable g) => CxtFun g (g :&: [Int])
 pathAnn = runDownTrans trans [] where
     trans :: DownTrans g [Int] (g :&: [Int])
-    trans q t = simpCxt (fmap (\ (Numbered (n,s)) -> s (n:q)) (number t) :&: q)
+    trans q t = simpCxt (fmap (\ (Numbered n s) -> s (n:q)) (number t) :&: q)
