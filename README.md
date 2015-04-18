@@ -1,5 +1,5 @@
-Tree automata on Compositional Data Types
-=========================================
+# Tree automata on Compositional Data Types [![Build Status](https://travis-ci.org/pa-ba/compdata-automata.svg?branch=master)](https://travis-ci.org/pa-ba/compdata-automata)
+
 
 This library extends the
 [`compdata`](https://hackage.haskell.org/package/compdata) package
