@@ -13,7 +13,6 @@ install:
  - cabal --version
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - if [[ $GHCVER == '7.10.1' ]]; then ./install-compdata ; fi
  - cabal install --only-dependencies --enable-tests --enable-benchmarks
 
 script:
