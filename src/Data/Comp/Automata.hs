@@ -185,7 +185,7 @@ runUpTrans trans = snd . runUpTransSt trans
 -- returns the final state of the run.
 
 runUpTransSt :: (Functor f, Functor g) => UpTrans f q g -> Term f -> (q, Term g)
-runUpTransSt = cata . upAlg
+runUpTransSt up t = cata (upAlg up) t
 
 -- | This function generalises 'runUpTrans' to contexts. Therefore,
 -- additionally, a transition function for the holes is needed.
@@ -299,7 +299,7 @@ upState f s = res where res = explicit f res id s
 -- | This combinator runs a GUTA on a term.
 
 runDUpState :: Functor f => DUpState f q q -> Term f -> q
-runDUpState = runUpState . upState
+runDUpState up t = runUpState (upState up) t
 
 -- | This combinator constructs the product of two GUTA.
 

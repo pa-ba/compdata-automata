@@ -2,6 +2,7 @@
 TypeOperators, FlexibleInstances, UndecidableInstances,
 ScopedTypeVariables, TypeSynonymInstances, GeneralizedNewtypeDeriving,
 OverlappingInstances, ConstraintKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Examples.Automata.Compiler where
 
@@ -21,18 +22,22 @@ import qualified Data.Map as Map
 type Var = String
 
 data Val a = Const Int
+  deriving Functor
 data Op a  = Plus a a
            | Times a a
+  deriving Functor
 type Core = Op :+: Val
+
 data Let a = Let Var a a
            | Var Var
-
+  deriving Functor
 type CoreLet = Let :+: Core
 
 data Sugar a = Neg a
              | Minus a a
+  deriving Functor
 
-$(derive [makeFunctor, makeFoldable, makeTraversable, smartConstructors, makeShowF]
+$(derive [makeFoldable, makeTraversable, smartConstructors, makeShowF]
   [''Val, ''Op, ''Let, ''Sugar])
 
 
