@@ -110,7 +110,7 @@ module Data.Comp.Automata
 
 import Data.Comp.Algebra
 import Data.Comp.Annotation
-import Data.Projection
+import Data.Comp.Projection
 import Data.Comp.Mapping
 import Data.Comp.Term
 
