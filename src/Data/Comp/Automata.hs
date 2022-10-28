@@ -100,7 +100,7 @@ module Data.Comp.Automata
     , (|->)
     , empty
     -- * Product State Spaces
-    , module Data.Projection
+    , module Data.Comp.Projection
     -- * Annotations
     , propAnnQ
     , propAnnUp
