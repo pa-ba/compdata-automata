@@ -1,5 +1,5 @@
 Name:			compdata-automata
-Version:		0.9.2
+Version:		0.9.3
 Synopsis:            	Tree automata on Compositional Data Types
 Description:
   This library extends the @compdata@ package with advanced recursion
