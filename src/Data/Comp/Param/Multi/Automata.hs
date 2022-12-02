@@ -106,7 +106,7 @@ module Data.Comp.Param.Multi.Automata
     -- * Product State Spaces
     , module Data.Comp.Projection
     -- * Annotations
-    --, propAnnQ
+    , propAnnQ
     , propAnnUp
     , propAnnDown
     , pathAnn
@@ -114,13 +114,9 @@ module Data.Comp.Param.Multi.Automata
 
 import Data.Comp.Multi.HFunctor
 import Data.Comp.Param.Multi
-import Data.Comp.Param.Multi.Algebra
-import Data.Comp.Param.Multi.Annotation
-import Data.Comp.Param.Multi.HDifunctor
 import Data.Comp.Param.Multi.HDitraversable
 import Data.Comp.Projection
 import Data.Comp.Param.Multi.Mapping
-import Data.Comp.Param.Multi.Term
 
 import qualified Data.Comp.Ops as O
 import Unsafe.Coerce
