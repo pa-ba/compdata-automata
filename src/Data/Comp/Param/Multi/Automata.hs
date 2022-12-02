@@ -98,7 +98,7 @@ module Data.Comp.Param.Multi.Automata
     , prodDDownState
     , (>*<)
     -- * Bidirectional Tree State Transformations
-    --, runDState
+    , runDState
     -- * Operators for Finite Mappings
     , (&)
     , (|->)
@@ -119,6 +119,7 @@ import Data.Comp.Projection
 import Data.Comp.Param.Multi.Mapping
 
 import qualified Data.Comp.Ops as O
+import Data.Bifunctor (first, second, bimap)
 import Unsafe.Coerce
 
 
@@ -489,14 +490,17 @@ prodDDownState sp sq ab be t = prodMap (pr ab) (pr ab) (sp ab be t) (sq ab be t)
 -- transformations. Both state transformations can depend mutually
 -- recursive on each other.
 
-runDState :: forall f u d . HDitraversable f => DUpState' f (u,d) u -> DDownState' f (u,d) d -> d -> Term f :=> u
+runDState :: forall f u d . HDitraversable f => DUpState' f (u,d) u -> DDownState' f (u,d) d -> d -> Term f :=>  u
 runDState up down d (Term (In t)) = u where
+        --t' :: f a (Numbered (K (u,d))) i
         t' = hdimap id bel $ number t
         bel (Numbered i s) =
-            let d' = lookupNumMap d i m
-            in Numbered i (runDState up down d' (Term $ unsafeCoerce s), d')
-        m = down (u,d) unNumbered t'
-        u = up (u,d) unNumbered t'
+            let d' :: d
+                d' = lookupNumMap d i m
+            in Numbered i (K $ runDState up down d' (Term $ unsafeCoerce s), d')
+        m :: NumMap ((,) u) d
+        m = unK $ down (u,d) (bimap unK (const d) . unNumbered) t'
+        u = up (u,d) (bimap unK (const d) . unNumbered) t'
 runDState _ _ _ (Term _) = undefined
 
 -- | This combinator runs a stateful term homomorphisms with a state

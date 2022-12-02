@@ -2,13 +2,15 @@
 TypeOperators, FlexibleInstances, UndecidableInstances,
 ScopedTypeVariables, TypeSynonymInstances,
 OverlappingInstances, ConstraintKinds, KindSignatures #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Automata.Compiler where
 
 import Data.Comp.Param.Multi.Automata
 import Data.Comp.Param.Multi.HDitraversable
+import Data.Comp.Multi.HFunctor
 --import Data.Comp.Param.Multi.HDifoldable
 import Data.Comp.Param.Multi.Derive
 import Data.Comp.Param.Multi.Ops
@@ -19,6 +21,7 @@ import Prelude hiding (foldl)
 import Data.Set (Set, union, singleton, delete, member)
 import qualified Data.Set as Set
 
+import Data.Coerce
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -62,7 +65,6 @@ instance Eval Op where
 instance Eval Let where
     evalSt (Let e f) = f e
 
-{-
 type Addr = Int
 
 data Instr = Acc Int
@@ -100,10 +102,22 @@ runCode' c = mAcc $ runCode c MState{mRam = Map.empty, mAcc = error "accumulator
 
 
 -- | Defines the height of an expression.
-heightSt :: HFoldable f => UpState f Int
-heightSt t = hfoldl max 0 t + 1
+class HasHeight f where
+    heightSt :: UpState f Int
 
-tmpAddrSt :: HFoldable f => UpState f Int
+$(derive [liftSum] [''HasHeight])
+
+instance HasHeight Val where
+    heightSt _ = 0
+
+instance HasHeight Op where
+    heightSt (Plus x y) = max x y + 1
+    heightSt (Times x y) = max x y + 1
+
+instance HasHeight Let where
+    heightSt (Let e f) = f e + 1
+
+tmpAddrSt :: HasHeight f => UpState f Int
 tmpAddrSt = (+1) . heightSt
 
 
@@ -113,17 +127,17 @@ class VarAddrSt f where
   varAddrSt :: DownState f VarAddr
 
 instance (VarAddrSt f, VarAddrSt g) => VarAddrSt (f :+: g) where
-    varAddrSt (K q :*: Inl x) = varAddrSt (K q :*: x)
-    varAddrSt (K q :*: Inr x) = varAddrSt (K q :*: x)
+    varAddrSt (StateAnn q (Inl x)) = varAddrSt (StateAnn q x)
+    varAddrSt (StateAnn q (Inr x)) = varAddrSt (StateAnn q x)
 
 instance VarAddrSt Let where
-  varAddrSt (K d :*: Let _ _ x) = K $ x |-> (d + 2)
-  varAddrSt _ = K empty
+  varAddrSt (StateAnn d (Let e x)) = x undefined |-> (d + 2)
 
 instance VarAddrSt f where
-  varAddrSt _ = K empty
+  varAddrSt _ = empty
 
 
+{-
 type Bind = Map Var Int
 
 bindSt :: (Let :<: f,VarAddr :< q) => DDownState f q Bind
@@ -131,6 +145,7 @@ bindSt t = case proj t of
              Just (Let v _ e) -> K $ e |-> q'
                        where q' = Map.insert v (varAddr above) above
              _ -> K empty
+-}
 
 -- | Defines the code that an expression is compiled to. It depends on
 -- an integer state that denotes the height of the current node.
@@ -138,36 +153,35 @@ class CodeSt f q where
     codeSt :: DUpState f q Code
 
 instance (CodeSt f q, CodeSt g q) => CodeSt (f :+: g) q where
-    codeSt (Inl x) = codeSt x
-    codeSt (Inr x) = codeSt x
+    codeSt ab be (Inl x) = codeSt ab be x
+    codeSt ab be (Inr x) = codeSt ab be x
 
 
 instance CodeSt Val q where
-    codeSt (Const i) = K [Acc i]
+    codeSt _ _ (Const i) = [Acc i]
 
 instance (Int :< q) => CodeSt Op q where
-    codeSt (Plus x y) = K $ below x ++ [Store i] ++ below y ++ [Add i]
-        where i = below y
-    codeSt (Times x y) = K $ below x ++ [Store i] ++ below y ++ [Mul i]
-        where i = below y
+    codeSt ab be (Plus x y) = pr (be x) ++ [Store i] ++ pr (be y) ++ [Add i]
+        where i = pr $ be y
+    codeSt ab be (Times x y) = pr (be x) ++ [Store i] ++ pr (be y) ++ [Mul i]
+        where i = pr $ be y
 
-instance (VarAddr :< q, Bind :< q) => CodeSt Let q where
-    codeSt (Let _ b e) = K $ below b ++ [Store i] ++ below e
-                    where i = varAddr above
-    codeSt (Var v) = case Map.lookup v above of
-                       Nothing -> error $ "unbound variable " ++ v
-                       Just i -> K [Load i]
-
-compile' :: (CodeSt f (Code,Int), HFoldable f, HFunctor f) => Term f i -> (Code, Int)
-compile' = unK . runDUpState (codeSt `prodDUpState` dUpState tmpAddrSt)
+instance (VarAddr :< q) => CodeSt Let q where
+    codeSt ab be (Let b e) = pr (be b) ++ [Store i] ++ pr (be (e undefined))
+                    where i = varAddr $ pr ab
 
 
-exComp' = compile' (iConst 2 `iPlus` iConst 3 :: Term Core i)
+compile' :: (CodeSt f (Code,Int), HDifunctor f, HasHeight f) => Term f :=> (Code, Int)
+compile' = runDUpState (codeSt `prodDUpState` dUpState tmpAddrSt)
+
+
+exComp' = compile' (Term $ iConst 2 `iPlus` iConst 3 :: Term Core Int)
 
 
 
-compile :: (CodeSt f ((Code,Int),(Bind,VarAddr)), HTraversable f, HFunctor f, Let :<: f, VarAddrSt f)
-           => Term f i -> Code
+{-
+compile :: (CodeSt f ((Code,Int),VarAddr), HDitraversable f, HDifunctor f, Let :<: f, VarAddrSt f)
+           => Term f :=> Code
 compile = fst . runDState
           (codeSt `prodDUpState` dUpState tmpAddrSt)
           (bindSt `prodDDownState` dDownState varAddrSt)
