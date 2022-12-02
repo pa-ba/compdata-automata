@@ -33,6 +33,7 @@ library
   Exposed-Modules:      Data.Comp.Automata
                         Data.Comp.MacroAutomata
                         Data.Comp.Param.Automata
+                        Data.Comp.Param.Multi.Automata
   Build-Depends:	base >= 4.7 && < 5, containers, compdata >= 0.9, compdata-param, projection
   hs-source-dirs:	src
   ghc-options:          -W
