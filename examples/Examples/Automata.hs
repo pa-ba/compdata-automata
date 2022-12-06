@@ -92,7 +92,7 @@ duttTransAlg trans = fmap injectCxt . trans
 term.  -}
 
 runDUTTTrans :: (Functor f, Functor g)  => DUTTTrans f g q -> Term f -> (q, Term g)
-runDUTTTrans = cata . duttTransAlg
+runDUTTTrans x = cata (duttTransAlg x)
 
 {-| This data type represents deterministic bottom-up tree
 transducers. -}
@@ -127,7 +127,7 @@ nuttTransAlg trans = liftM (fmap injectCxt) . trans
 term.  -}
 
 runNUTTTrans :: (Traversable f, Functor g)  => NUTTTrans f g q -> Term f -> [(q, Term g)]
-runNUTTTrans = cataM . nuttTransAlg
+runNUTTTrans x = cataM (nuttTransAlg x)
 
 {-| This data type represents non-deterministic bottom-up tree
 transducers (NUTTs). -}
