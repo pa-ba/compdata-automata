@@ -119,6 +119,7 @@ import Data.Comp.Projection
 import Data.Comp.Param.Multi.Mapping
 
 import qualified Data.Comp.Ops as O
+import Data.Comp.Param.Multi.Ops
 import Data.Bifunctor (first, second, bimap)
 import GHC.Exts (Any)
 import Unsafe.Coerce
@@ -413,6 +414,11 @@ tagDownState i o t (StateAnn q s) = hdimap id (K . i . unK) $ t (StateAnn (o q) 
 
 class HDizippable (f :: (* -> *) -> (* -> *) -> * -> *) where
     hdizip :: forall a b1 b2 i . f a b1 i -> f a b2 i -> f a (b1 O.:*: b2) i
+
+instance (HDizippable f, HDizippable g) => HDizippable (f :+: g) where
+    hdizip (Inl x) (Inl y) = Inl $ hdizip x y
+    hdizip (Inr x) (Inr y) = Inr $ hdizip x y
+    hdizip _ _ = error "cannot zip signatures with different shapes"
 
 -- | This function constructs the product DTA of the given two DTAs.
 
