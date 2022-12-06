@@ -86,6 +86,7 @@ module Data.Comp.Param.Multi.Automata
     , compHomDownTrans
     -- * Deterministic Top-Down Tree State Transformations
     -- ** Monolithic State
+    , HDizippable (..)
     , DownState
     , tagDownState
     , prodDownState
