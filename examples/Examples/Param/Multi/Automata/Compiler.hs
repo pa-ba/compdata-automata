@@ -14,6 +14,7 @@ import Data.Comp.Multi.HFunctor
 --import Data.Comp.Param.Multi.HDifoldable
 import Data.Comp.Param.Multi.Derive
 import Data.Comp.Param.Multi.Ops
+import qualified Data.Comp.Ops as O
 import Data.Comp.Param.Multi hiding (height)
 import Data.Foldable
 import Prelude hiding (foldl)
@@ -127,14 +128,14 @@ class VarAddrSt f where
   varAddrSt :: DownState f VarAddr
 
 instance (VarAddrSt f, VarAddrSt g) => VarAddrSt (f :+: g) where
-    varAddrSt (StateAnn q (Inl x)) = varAddrSt (StateAnn q x)
-    varAddrSt (StateAnn q (Inr x)) = varAddrSt (StateAnn q x)
+    varAddrSt (StateAnn q (Inl x)) = Inl $ varAddrSt (StateAnn q x)
+    varAddrSt (StateAnn q (Inr x)) = Inr $ varAddrSt (StateAnn q x)
 
 instance VarAddrSt Let where
-  varAddrSt (StateAnn d (Let e x)) = x undefined |-> (d + 2)
+  varAddrSt (StateAnn d (Let e x)) = Let (K $ d+2) (const . K $ d+2)
 
-instance VarAddrSt f where
-  varAddrSt _ = empty
+instance HDifunctor f => VarAddrSt f where
+  varAddrSt (StateAnn q s) = hdimap id (const undefined) s
 
 
 {-

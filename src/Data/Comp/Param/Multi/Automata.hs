@@ -158,7 +158,7 @@ pureHom :: (forall q . QHom f q g) -> Hom f g
 pureHom phom = phom undefined (const undefined)
 
 -- | Annotate a type with a state.
-data StateAnn :: * -> (* -> *) -> (* -> *) where
+data StateAnn :: * -> (* -> *) -> * -> * where
   StateAnn :: q -> f i -> (StateAnn q f) i
 
 -- | This type represents transition functions of total, deterministic
@@ -354,7 +354,6 @@ runDownTrans tr q t = run t q where
     run (Var a) _ = Var a
 
 -- | This function runs the given DTT on the given tree.
-
 runDownTrans' :: forall f g h a b q . (HDifunctor f, HDifunctor g) => DownTrans f q g -> q -> Cxt h f a (K q :->: b) :-> Cxt h g a b
 runDownTrans' tr q t = run t q where
     run :: forall i. Cxt h f a (K q :->: b) i -> q -> Cxt h g a b i
@@ -399,22 +398,27 @@ compDownTransHom :: (HDifunctor g, HDifunctor h)
 compDownTransHom trans hom q t = runDownTrans' trans q (hom t)
 
 
+-------------------------------------------------------------------------------rewrite
+
 -- | This type represents transition functions of total, deterministic
 -- top-down tree acceptors (DTAs).
 
-type DownState (f :: (* -> *) -> (* -> *) -> * -> *) q = forall m a b . Mapping m b => StateAnn q (f a b) :=> m q
+type DownState (f :: (* -> *) -> (* -> *) -> * -> *) q = forall a b . StateAnn q (f a b) :-> f a (K q)
 
 -- | Changes the state space of the DTA using the given isomorphism.
 
-tagDownState :: (q -> p) -> (p -> q) -> DownState f q -> DownState f p
-tagDownState i o t (StateAnn q s) = i <$> t (StateAnn (o q) s)
+tagDownState :: HDifunctor f => (q -> p) -> (p -> q) -> DownState f q -> DownState f p
+tagDownState i o t (StateAnn q s) = hdimap id (K . i . unK) $ t (StateAnn (o q) s)
+
+class HDizippable (f :: (* -> *) -> (* -> *) -> * -> *) where
+    hdizip :: forall a b1 b2 i . f a b1 i -> f a b2 i -> f a (b1 O.:*: b2) i
 
 -- | This function constructs the product DTA of the given two DTAs.
 
-prodDownState :: DownState f p -> DownState f q -> DownState f (p,q)
-prodDownState sp sq (StateAnn (p,q) t) = prodMap p q (sp (StateAnn p t)) (sq (StateAnn q t))
+prodDownState :: (HDizippable f, HDifunctor f) => DownState f p -> DownState f q -> DownState f (p,q)
+prodDownState sp sq (StateAnn (p,q) t) = hdimap id (\(K p O.:*: K q) -> K (p,q)) $ hdizip (sp (StateAnn p t)) (sq (StateAnn q t))
 
-
+{-
 -- | Apply the given state mapping to the given functorial value by
 -- adding the state to the corresponding index if it is in the map and
 -- otherwise adding the provided default state.
@@ -426,36 +430,29 @@ appMap qmap q s = hdimap id (qfun q) s'
           qfun :: forall j . q -> Numbered (K q :->: b) j -> (StateAnn q b) j
           qfun q1 (Numbered i a) = let q' = lookupNumMap q1 i (qmap s')
                                 in StateAnn q' . appHFun a $ K q'
-
-mcurry :: forall q f (a :: * -> *) m i . ((StateAnn q (f a)) i -> m q) -> q -> f a i -> m q
-mcurry f q t = f $ StateAnn q t
+-}
 
 -- | This function constructs a DTT from a given stateful term--
 -- homomorphism with the state propagated by the given DTA.
 
-downTrans :: forall f g q . (HDitraversable f, HDifunctor g) => DownState f q -> QHom f q g -> DownTrans f q g
-downTrans st f q s = g $ f q (\(StateAnn x _) -> x) (appMap (mcurry st q) q s) where
-    g :: Context g a (StateAnn q b) i -> Context g a b i
-    g (Hole (StateAnn _ x)) = Hole x
-    g (Var x) = Var x
-    g (In x) = In $ hdimap id g x
+downTrans :: forall f g q . (HDizippable f, HDifunctor f, HDifunctor g) => DownState f q -> QHom f q g -> DownTrans f q g
+downTrans st f q s = hfmapCxt (\(x O.:*: _) -> x) $ f q (\(_ O.:*: K y) -> y) $ hdimap id (\(h O.:*: q) -> appHFun h q O.:*: q) $ hdizip s $ st $ StateAnn q s
 
 
 -- | This function applies a given stateful term homomorphism with a
 -- state space propagated by the given DTA to a term.
 
-runDownHom :: (HDitraversable f, HDifunctor g)
+runDownHom :: (HDizippable f, HDifunctor f, HDifunctor g)
             => DownState f q -> QHom f q g -> q -> Term f :-> Term g
 runDownHom st h q t = unsafeCoerce . runDownTrans (downTrans st h) q $ unTerm t
 
 -- | This type represents transition functions of generalised
 -- deterministic top-down tree acceptors (GDTAs) which have access
-
 -- to an extended state space.
 type DDownState f p q = (q :< p) => DDownState' f p q
 
-type DDownState' (f :: (* -> *) -> (* -> *) -> * -> *) p q = forall a m i . Mapping m i
-                                => p -> (i :=> p) -> f a i :=> m q
+type DDownState' (f :: (* -> *) -> (* -> *) -> * -> *) p q = forall a i .
+                                p -> (i :=> p) -> f a i :-> f a (K q)
 
 -- | This combinator turns an arbitrary DTA into a GDTA.
 
@@ -474,13 +471,13 @@ downState f (StateAnn q s) = res
 -- | This combinator constructs the product of two dependant top-down
 -- state transformations.
 
-prodDDownState :: (p :< c, q :< c)
+prodDDownState :: (p :< c, q :< c, HDizippable f, HDifunctor f)
                => DDownState f c p -> DDownState f c q -> DDownState f c (p,q)
-prodDDownState sp sq ab be t = prodMap (pr ab) (pr ab) (sp ab be t) (sq ab be t)
+prodDDownState sp sq ab be t = hdimap id (\(K p O.:*: K q) -> K (p,q)) $ hdizip (sp ab be t) (sq ab be t)
 
 -- | This is a synonym for 'prodDDownState'.
 
-(>*<) :: (p :< c, q :< c, HDifunctor f)
+(>*<) :: (p :< c, q :< c, HDizippable f, HDifunctor f)
          => DDownState f c p -> DDownState f c q -> DDownState f c (p,q)
 (>*<) = prodDDownState
 
